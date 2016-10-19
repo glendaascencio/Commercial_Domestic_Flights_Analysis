@@ -1,0 +1,161 @@
+# Commercial_Domestic_Flights_Analysis
+---
+title: "Analyzing hflights Data using dplyr,ggplot2, hflights, and plotly"
+author: "Glenda Ascencio"
+date: "October 14, 2016"
+output: html_document
+---
+
+##### In this research we're analyzing 227,496 (nrow(hflights)) data entries from the hflights data package containing commercial domestic flights that departed Houston (IAH and HOU) in 2011.The data comes from the Research and Innovation Technology Administration at the Bureau of Transporation statistics.
+
+```{r echo=TRUE, error=FALSE, message=FALSE, warning=FALSE}
+## libraries
+library(dplyr)
+library(hflights)
+library(scales)
+
+## Cleaning data
+column <- c( "year", "month", "day_of_month", "day_of_week", "dep_time", "arr_time", "unique_carrier", "flight_num", "tail_num", "actual_elapsed_time", "air_time", "arr_delay", "dep_delay", "origin", "destination", "distance", "taxi_in", "taxi_out", "cancelled", "cancellation_code", "diverted")
+
+colnames(hflights) <- column
+
+```
+
+##### Displaying out a summary with variables min_distance and max_distance
+```{r echo=TRUE, error=FALSE, message=FALSE}
+summarise(hflights, min_distance=min(distance), max_distance=max(distance))
+summarise(hflights, avg_distance=mean(distance), standard_dev=sd(distance))
+```
+
+##### What is the most popular unique carrier that most individual travels the most
+```{r echo=TRUE, error=FALSE, message=FALSE}
+## 
+carrier <- hflights %>%
+  group_by(unique_carrier) %>%
+  summarize(carrier_sum=n()) %>%
+  arrange(desc(carrier_sum))
+
+carrier$unique_carrier <- factor(carrier$unique_carrier,
+                                 levels = c("XE", "CO", "WN", "OO", "MQ", "US", "AA","DL",
+                                            "EV", "FL", "UA", "F9", "B6", "AS", "YV"),
+                                 ordered = TRUE)
+library(plotly)
+plot_ly(carrier, x = ~unique_carrier, y = ~carrier_sum, color = ~unique_carrier, text = ~paste("total_carrier: ", carrier$carrier_sum)) %>%
+   layout(title = "2011 Most Popular Carrier",
+         scene = list(
+           xaxis = list(title = "Unique carrier"), 
+           yaxis = list(title = "Total time user traveled on each carrier")))
+```
+
+##### What is the most popular day of the week that most individual travels the most
+```{r echo=TRUE, error=FALSE, message=FALSE}
+## 
+day_week <- hflights %>%
+  group_by(day_of_week) %>%
+  summarize(day_week_sum=n()) %>%
+  arrange(desc(day_week_sum))
+
+day_week$day_of_week <- factor(day_week$day_of_week,
+                                 levels = c( "5", "4", "1", "7", "3", "2", "6"),
+                                 ordered = TRUE)
+
+plot_ly(day_week, x = ~day_of_week, y = ~day_week_sum, color = ~day_of_week, text = ~paste("p_day_week: ", day_week$day_week_sum)) %>%
+   layout(title = "2011 Most Popular Day of the Week",
+         scene = list(
+           xaxis = list(title = "Day of the week"), 
+           yaxis = list(title = "Total users traveling")))
+
+
+```
+
+##### What is the most popular day of the month that most individual travels the most
+```{r echo=TRUE, error=FALSE, message=FALSE}
+## 
+day_month <- hflights %>%
+  group_by(day_of_month) %>%
+  summarize(day_month_sum=n()) %>%
+  arrange(day_month_sum)
+
+day_month$day_of_month <- factor(day_month$day_of_month,
+                                 levels = c("31", "29", "30", "5", "24", "19", "4", "12",
+                                            "8", "16", "25", "26", "1", "15", "3", "9",
+                                            "23", "22", "2", "17", "10", "13", "11", "20",
+                                            "6", "18", "7", "14", "21", "27", "28"),
+                                 ordered = TRUE)
+
+plot_ly(day_month, x = ~day_of_month, y = ~day_month_sum, color = ~day_of_month, text = ~paste("p_day_month: ", day_month$day_month_sum)) %>%
+   layout(title = "2011 Most Popular Day of the Month",
+         scene = list(
+           xaxis = list(title = "Day of the week"), 
+           yaxis = list(title = "Total users traveling")))
+
+
+```
+
+
+```{r echo=TRUE, error=FALSE, message=FALSE}
+## Removing rows that have NA arr_delay: hflights1
+hflights1 <- filter(hflights, !is.na(arr_delay))
+
+## Generating a summary about arr_delay column from hflights1
+summarise(hflights1, earliest=min(arr_delay), average=mean(arr_delay), latest=max(arr_delay), sd=sd(arr_delay))
+
+## Keeping rows that have no NA taxi_in and no NA taxi_out: temp2
+hflights1 <- filter(hflights, !is.na(taxi_in), !is.na(taxi_out))
+
+## Print the maximum taxi_ing difference of temp2 with summarise()
+summarise(hflights1, max_taxi_difference=max(taxi_out-taxi_in))
+
+## Filter hflights to keep all flights that are flown by American Airlines (“American”)
+AA <- filter(hflights, unique_carrier == "American")
+
+## Generate summarizing statistics for aa.
+
+  ### number_of_flights ==  represents the total number of flights
+  ### number_cancelled_flights == the total number of cancelled flights
+  ### percentage_cancelled_flights == the percentage of cancelled flights
+  ### avg_delay_of_flights == the average arrival delay of flights whose delay is not NA
+
+summarise(AA, 
+          number_of_flights = n(), 
+          number_cancelled_flights = sum(cancelled == 1), 
+          percentage_cancelled_flights = mean(cancelled == 1, na.rm = TRUE) * 100, 
+          avg_delay_of_flights = mean(arr_delay, na.rm = TRUE))
+
+## Adding a variable named difference that is the result of subtracting taxi_in from taxi_out, and then picking all of the rows whose diff value does not equal NA. Lastly, summarising the data set with a value named avg that is the mean diff value.
+
+hflights %>%
+  mutate(difference=(taxi_in-taxi_out)) %>%
+  filter(is.na(difference)) %>%
+  summarise(avg=mean(difference))
+
+## Analyzing flights that had an actual average speed of < 70 mph.real_time: the actual elapsed time plus 100 minutes. This will be an estimate of how much time a person spends getting from point A to point B while flying, including getting to the airport, security checks, etc.Lastly, mph: the speed with which you travel if you do the calculations with real_time.
+flights_speed_testing <- hflights %>%
+  select(destination, unique_carrier, distance, actual_elapsed_time) %>%  
+  mutate(real_time = actual_elapsed_time + 100, mph = distance / real_time * 60)    
+
+flights_speed_testing %>%
+  filter(!is.na(mph), mph < 70) %>%
+  summarise( n_less = n(), 
+             n_destination= n_distinct(destination), 
+             min_dist = min(distance), 
+             max_dist = max(distance))
+## Lastly, let's analyze preferable flights that are 150% faster than driving,this means that they travel 105 mph or greater in real time. Also, assume that cancelled or diverted flights are less preferable than driving.
+
+  ### non_preferable_flights == the number of non-preferable flights in hflights
+  ### percentage_non_preferable_flights == the percentage of non-preferable flights in hflights
+  ### number_of_destination == the number of destinations that non-preferable flights traveled to
+  ### min_distance == the minimum distance that non-preferable flights traveled
+  ### max_distance == the maximum distance that non-preferable flights traveled
+
+hflights %>% 
+  mutate(real_time = actual_elapsed_time + 100, mph = distance / real_time * 60) %>%
+  filter(mph < 105 | cancelled == 1 | diverted == 1) %>%
+  summarise(non_preferable_flights = n(), 
+            percentage_non_preferable_flights = non_preferable_flights / nrow(hflights) *
+              100, 
+            number_of_destination = n_distinct(destination), 
+            min_distance = min (distance), 
+            max_distance = max(distance))
+```
+
